@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>FPS TEST</title>
+  <style>
+    canvas {
+      display: block;
+    }
+
+    body {
+      margin: 0;
+    }
+
+    form {
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      right: 0;
+      top: 0;
+      margin: 10px;
+      color: white;
+      padding: 8px 12px;
+      background: #00000088;
+      font-family: monospace;
+    }
+  </style>
+</head>
+<body>
+<div class="container"></div>
+<form action="" onchange="setValues(this)">
+  <label><input name="antialias" type="checkbox"> antialiasing</label>
+  <label><input name="pixelRatio" type="checkbox"> devicePixelRatio</label>
+  <label><input name="texture" type="checkbox"> BG Texture</label>
+  <label><input name="shader" type="checkbox"> ShaderMaterial</label>
+  <label><input name="material" type="checkbox"> MeshStandardMaterial</label>
+  <label><input name="shadow" type="checkbox"> Shadow</label>
+</form>
+<script type="module">
+  import * as THREE from "https://threejs.org/build/three.module.js";
+  import Stats from "https://threejs.org/examples/jsm/libs/stats.module.js";
+
+  const texture = new THREE.TextureLoader().load("https://threejs.org/examples/textures/uv_grid_directx.jpg");
+
+  const stats = new Stats();
+  document.body.appendChild(stats.dom);
+  let scene, camera, renderer, cube;
+
+  document.forms[0].onchange = function() {
+    set(Object.fromEntries(new FormData(this)));
+  };
+
+  const set = function(option = {}) {
+    const container = document.querySelector(".container");
+    container.innerHTML = "";
+
+    renderer = new THREE.WebGLRenderer({
+      canvas: container.appendChild(document.createElement("canvas")),
+      antialias: !!option.antialias
+    });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(option.pixelRatio ? devicePixelRatio : 1);
+    renderer.shadowMap.enabled = !!option.shadow;
+
+    scene = new THREE.Scene();
+    scene.background = option.texture ? texture : new THREE.Color("blue");
+
+    camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.z = 5;
+
+    cube = new THREE.Mesh(
+      new THREE.BoxGeometry(),
+      new THREE[option.material ? "MeshStandardMaterial" : "MeshBasicMaterial"]({ color: 0x00ff00 })
+    );
+    cube.castShadow = true;
+
+    const plane = new THREE.Mesh(
+      new THREE.PlaneGeometry(6, 6),
+      new THREE[option.material ? "MeshStandardMaterial" : "MeshBasicMaterial"]({ color: 0xff0000 })
+    );
+    plane.position.y = -1;
+    plane.rotation.x = Math.PI / -2;
+    plane.receiveShadow = true;
+
+    if (option.shader) {
+      const bg = new THREE.Mesh(
+        new THREE.PlaneGeometry(30, 30),
+        new THREE.ShaderMaterial({
+          depthTest: false,
+          uniforms: {
+            color1: {
+              value: new THREE.Color("yellow")
+            },
+            color2: {
+              value: new THREE.Color("blue")
+            }
+          },
+          vertexShader: `
+            varying float y;
+            void main(){
+                vec4 v = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                y = v.y / v.z * 0.5 + 0.5;
+                gl_Position = v;
+            }`,
+
+          fragmentShader: `
+            uniform vec3 color1;
+            uniform vec3 color2;
+            varying float y;
+
+            void main() {
+               gl_FragColor = vec4(mix(color1, color2, y), 1.0);
+            }`
+        })
+      );
+      bg.renderOrder = -10;
+      scene.add(bg);
+    }
+
+    const spotLight = new THREE.SpotLight(0xffffff);
+    spotLight.angle = Math.PI / 5;
+    spotLight.position.set(2, 3, 3);
+    spotLight.penumbra = 0.5;
+    spotLight.castShadow = true;
+
+    scene.add(cube, plane, spotLight);
+  };
+
+  set();
+
+  const animate = function() {
+    requestAnimationFrame(animate);
+    cube.rotation.x = cube.rotation.y = Date.now() / 5000;
+    stats.update();
+    renderer.render(scene, camera);
+  };
+
+  animate();
+
+</script>
+</body>
+</html>
